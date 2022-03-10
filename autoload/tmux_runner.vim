@@ -36,59 +36,31 @@ function! s:CreateRunnerPane(...) abort
     endif
 endfunction
 
-function! s:DetachRunnerPane() abort
-    if !s:ValidRunnerPaneSet() | return | endif
-    call s:BreakRunnerPaneToTempWindow()
-    let l:cmd = join(["rename-window -t", s:detached_window, g:VtrDetachedName])
-    call s:SendTmuxCommand(l:cmd)
-endfunction
-
 function! s:ValidRunnerPaneSet() abort
     if !exists("s:runner_pane")
-        call s:EchoError("No runner pane attached.")
+        call s:EchoError("No runner pane.")
         return 0
     endif
     if !s:ValidRunnerPaneNumber(s:runner_pane)
-        call s:EchoError("Runner pane setting (" . s:runner_pane . ") is invalid. Please reattach.")
+        call s:EchoError("Runner pane setting (" . s:runner_pane . ") is invalid. Please recreate.")
         return 0
     endif
     return 1
 endfunction
 
-function! s:DetachedWindowOutOfSync() abort
-  let l:window_map = s:WindowMap()
-  if index(keys(l:window_map), s:detached_window) == -1
-    return 1
-  endif
-  if s:WindowMap()[s:detached_window] != g:VtrDetachedName
-    return 1
-  endif
-  return 0
-endfunction
-
-function! s:DetachedPaneAvailable() abort
-  if exists("s:detached_window")
-    if s:DetachedWindowOutOfSync()
-      call s:EchoError("Detached pane out of sync. Unable to kill")
-      unlet s:detached_window
-      return 0
-    endif
-  else
-    call s:EchoError("No detached runner pane.")
-    return 0
-  endif
-  return 1
-endfunction
-
-function! s:RequireLocalPaneOrDetached() abort
-    if !exists('s:detached_window') && !exists('s:runner_pane')
-        call s:EchoError("No pane, local or detached.")
+function! s:RequireRunnerPane() abort
+    if !exists('s:runner_pane')
+        call s:EchoError("No runner pane.")
         return 0
     endif
     return 1
 endfunction
 
-function! s:KillLocalRunner() abort
+function! s:PaneExists(pane) abort
+    return v:false
+endfunction
+
+function! s:KillRunnerPane() abort
     if s:ValidRunnerPaneSet()
       call s:SendTmuxCommand('kill-pane', '-t', s:runner_pane)
       unlet s:runner_pane
@@ -105,33 +77,23 @@ function! s:WindowMap() abort
   return l:window_map
 endfunction
 
-function! s:KillDetachedWindow() abort
-    if !s:DetachedPaneAvailable() | return | endif
-    call s:SendTmuxCommand("kill-window", '-t', s:detached_window)
-    unlet s:detached_window
-endfunction
-
 function! s:KillRunnerPane() abort
-    if !s:RequireLocalPaneOrDetached() | return | endif
-    if exists("s:runner_pane")
-        call s:KillLocalRunner()
-    else
-        call s:KillDetachedWindow()
+    if exists("s:runner_pane") && !empty(s:runner_pane) && s:PaneExists(s:runner_pane)
+        call s:KillRunnerPane()
     endif
 endfunction
 
 function! s:GetPaneID(...) abort
-    let l:target=''
+    let l:cmd=[ 'display-messate' ]
     if !empty(a:0)
-        let l:target = '-t '.a:0
+        let l:cmd += [ '-t ', a:0 ]
     endif
-  echo "display-message ".l:target."-p '#{pane_id}'"
-  call getchar()
-  return str2nr(s:SendTmuxCommand("display-message ".l:target."-p \"#{pane_id}\""))
+    let l:cmd += [ '-p', '"#{pane_id}"' ]
+    return s:SendTmuxCommand(l:cmd)
 endfunction
 
-function! s:ActivePaneIndex() abort
-  return s:SendTmuxCommand("display-message -p \"#{pane_id}\"")
+function! s:ActivePaneID() abort
+    return s:GetPaneID()
 endfunction
 
 function! s:TmuxPanes() abort
@@ -161,7 +123,11 @@ function! s:Strip(string) abort
 endfunction
 
 function! s:SendTmuxCommand(...) abort
-    return s:Strip(system('tmux ' . join(a:000)))
+    if type(a:0) == type([])
+        return s:Strip(system('tmux ' . join(a:0)))
+    else
+        return s:Strip(system('tmux ' . join(a:000)))
+    endif
 endfunction
 
 function! s:GetTmuxInfo(...) abort
@@ -228,13 +194,6 @@ function! s:ToggleOrientationVariable() abort
     let s:vtr_orientation = (s:vtr_orientation == "v" ? "h" : "v")
 endfunction
 
-function! s:BreakRunnerPaneToTempWindow() abort
-    call s:SendTmuxCommand('break-pane', '-d', '-t', s:runner_pane)
-    let s:detached_window = s:LastWindowNumber()
-    let s:vim_pane = s:ActivePaneIndex()
-    unlet s:runner_pane
-endfunction
-
 function! s:RunnerDimensionSpec() abort
     return join(["-p", s:vtr_percentage, "-".s:vtr_orientation])
 endfunction
@@ -250,7 +209,7 @@ function! s:PaneCount() abort
 endfunction
 
 function! s:AvailableRunnerPaneIndices() abort
-  return filter([], "v:val != " . s:ActivePaneIndex())
+  return filter([], "v:val != " . s:ActivePaneID())
 endfunction
 
 function! s:AltPane() abort
@@ -261,45 +220,11 @@ function! s:AltPane() abort
   endif
 endfunction
 
-function! s:AttachToPane(...) abort
-  if exists("a:1") && a:1 != ""
-    call s:AttachToSpecifiedPane(a:1)
-  elseif s:PaneCount() == 2
-    call s:AttachToSpecifiedPane(s:AltPane())
-  else
-    call s:PromptForPaneToAttach()
-  endif
-endfunction
-
-function! s:PromptForPaneToAttach() abort
-  if g:VtrDisplayPaneNumbers
-    call s:SendTmuxCommand('source ~/.tmux.conf && tmux display-panes')
-  endif
-  echohl String | let l:desired_pane = input('Pane #: ') | echohl None
-  if !empty(l:desired_pane)
-    call s:AttachToSpecifiedPane(l:desired_pane)
-  else
-    call s:EchoError("No pane specified. Cancelling.")
-  endif
-endfunction
-
 function! s:CurrentMajorOrientation() abort
   let l:orientation_map = { '[': 'v', '{': 'h' }
   let l:layout = s:TmuxInfo('window_layout')
   let l:outermost_orientation = substitute(l:layout, '[^[{]', '', 'g')[0]
   return l:orientation_map[l:outermost_orientation]
-endfunction
-
-function! s:AttachToSpecifiedPane(desired_pane) abort
-  let l:desired_pane = str2nr(a:desired_pane)
-  if s:ValidRunnerPaneNumber(l:desired_pane)
-    let s:runner_pane = l:desired_pane
-    let s:vim_pane = s:ActivePaneIndex()
-    let s:vtr_orientation = s:CurrentMajorOrientation()
-    echohl String | echo "\rRunner pane set to: " . l:desired_pane | echohl None
-  else
-    call s:EchoError("Invalid pane number: " . l:desired_pane)
-  endif
 endfunction
 
 function! s:EchoError(message) abort
@@ -308,44 +233,12 @@ endfunction
 
 function! s:DesiredPaneExists(desired_pane) abort
     let l:r = s:SendTmuxCommand('list-panes','-f',"'#{==:#{pane_id},".a:desired_pane."}'")
-    echo 'desired pane ='.a:desired_pane
-    echo 'result = '.l:r
-    call getchar()
 endfunction
 
 function! s:ValidRunnerPaneNumber(desired_pane) abort
-  if a:desired_pane == s:ActivePaneIndex() | return 0 | endif
+  if a:desired_pane == s:ActivePaneID() | return 0 | endif
   if s:DesiredPaneExists(a:desired_pane) | return 0 | endif
   return 1
-endfunction
-
-function! s:ReattachPane() abort
-    if !s:DetachedPaneAvailable() | return | endif
-    let s:vim_pane = s:ActivePaneIndex()
-    call s:_ReattachPane()
-    call s:FocusVimPane()
-    if g:VtrClearOnReattach
-        call s:SendClearSequence()
-    endif
-endfunction
-
-function! s:_ReattachPane() abort
-    let l:join_cmd = join(["join-pane", "-s", ":".s:detached_window.".0",
-        \ s:RunnerDimensionSpec()])
-    call s:SendTmuxCommand(l:join_cmd)
-    unlet s:detached_window
-    let s:runner_pane = s:ActivePaneIndex()
-endfunction
-
-function! s:ReorientRunner() abort
-    if !s:ValidRunnerPaneSet() | return | endif
-    call s:BreakRunnerPaneToTempWindow()
-    call s:ToggleOrientationVariable()
-    call s:_ReattachPane()
-    call s:FocusVimPane()
-    if g:VtrClearOnReorient
-        call s:SendClearSequence()
-    endif
 endfunction
 
 function! s:HighlightedPrompt(prompt) abort
@@ -391,9 +284,7 @@ function! tmux_runner#SendCommandToRunner(ensure_pane, ...) abort
 endfunction
 
 function! s:EnsureRunnerPane(...) abort
-    if exists('s:detached_window')
-        call s:ReattachPane()
-    elseif exists('s:runner_pane')
+    if exists('s:runner_pane')
         return
     else
         if exists('a:1')
@@ -479,19 +370,15 @@ function! tmux_runner#DefineCommands() abort
     command! VtrKillRunner call s:KillRunnerPane()
     command! -bang VtrFocusRunner call s:FocusRunnerPane(<bang>!0)
     command! VtrReorientRunner call s:ReorientRunner()
-    command! VtrDetachRunner call s:DetachRunnerPane()
-    command! VtrReattachRunner call s:ReattachPane()
     command! VtrClearRunner call s:SendClearSequence()
     command! VtrFlushCommand call s:FlushCommand()
     command! VtrSendCtrlD call s:SendCtrlD()
     command! VtrSendCtrlC call s:SendCtrlC()
-    command! -bang -nargs=? -bar VtrAttachToPane call s:AttachToPane(<f-args>)
     command! -nargs=1 VtrSendKeysRaw call s:SendKeysRaw(<q-args>)
 endfunction
 
 function! tmux_runner#DefineKeymaps() abort
     if g:VtrUseVtrMaps
-        nnoremap <leader>va :VtrAttachToPane<cr>
         nnoremap <leader>ror :VtrReorientRunner<cr>
         nnoremap <leader>sc :VtrSendCommandToRunner<cr>
         nnoremap <leader>sl :VtrSendLinesToRunner<cr>
@@ -499,7 +386,6 @@ function! tmux_runner#DefineKeymaps() abort
         nnoremap <leader>or :VtrOpenRunner<cr>
         nnoremap <leader>kr :VtrKillRunner<cr>
         nnoremap <leader>fr :VtrFocusRunner<cr>
-        nnoremap <leader>dr :VtrDetachRunner<cr>
         nnoremap <leader>cr :VtrClearRunner<cr>
         nnoremap <leader>fc :VtrFlushCommand<cr>
         nnoremap <leader>sf :VtrSendFile<cr>
@@ -515,8 +401,6 @@ function! tmux_runner#InitializeVariables() abort
     call s:InitVariable("g:VtrPrompt", "Command to run: ")
     call s:InitVariable("g:VtrUseVtrMaps", 0)
     call s:InitVariable("g:VtrClearOnReorient", 1)
-    call s:InitVariable("g:VtrClearOnReattach", 1)
-    call s:InitVariable("g:VtrDetachedName", "VTR_Pane")
     call s:InitVariable("g:VtrClearSequence", "")
     call s:InitVariable("g:VtrDisplayPaneNumbers", 1)
     call s:InitVariable("g:VtrStripLeadingWhitespace", 1)
