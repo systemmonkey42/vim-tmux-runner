@@ -1,4 +1,9 @@
-function! s:InitVariable(var, value)
+"
+"
+"
+"
+"
+function! s:InitVariable(var, value) abort
     if !exists(a:var)
         let l:escaped_value = substitute(a:value, "'", "''", "g")
         exec 'let ' . a:var . ' = ' . "'" . l:escaped_value . "'"
@@ -7,7 +12,7 @@ function! s:InitVariable(var, value)
     return 0
 endfunction
 
-function! s:DictFetch(dict, key, default)
+function! s:DictFetch(dict, key, default) abort
     if has_key(a:dict, a:key)
         return a:dict[a:key]
     else
@@ -15,7 +20,7 @@ function! s:DictFetch(dict, key, default)
     endif
 endfunction
 
-function! s:CreateRunnerPane(...)
+function! s:CreateRunnerPane(...) abort
     if exists("a:1")
         let s:vtr_orientation = s:DictFetch(a:1, 'orientation', s:vtr_orientation)
         let s:vtr_percentage = s:DictFetch(a:1, 'percentage', s:vtr_percentage)
@@ -31,14 +36,14 @@ function! s:CreateRunnerPane(...)
     endif
 endfunction
 
-function! s:DetachRunnerPane()
+function! s:DetachRunnerPane() abort
     if !s:ValidRunnerPaneSet() | return | endif
     call s:BreakRunnerPaneToTempWindow()
     let l:cmd = join(["rename-window -t", s:detached_window, g:VtrDetachedName])
     call s:SendTmuxCommand(l:cmd)
 endfunction
 
-function! s:ValidRunnerPaneSet()
+function! s:ValidRunnerPaneSet() abort
     if !exists("s:runner_pane")
         call s:EchoError("No runner pane attached.")
         return 0
@@ -50,7 +55,7 @@ function! s:ValidRunnerPaneSet()
     return 1
 endfunction
 
-function! s:DetachedWindowOutOfSync()
+function! s:DetachedWindowOutOfSync() abort
   let l:window_map = s:WindowMap()
   if index(keys(l:window_map), s:detached_window) == -1
     return 1
@@ -61,7 +66,7 @@ function! s:DetachedWindowOutOfSync()
   return 0
 endfunction
 
-function! s:DetachedPaneAvailable()
+function! s:DetachedPaneAvailable() abort
   if exists("s:detached_window")
     if s:DetachedWindowOutOfSync()
       call s:EchoError("Detached pane out of sync. Unable to kill")
@@ -75,7 +80,7 @@ function! s:DetachedPaneAvailable()
   return 1
 endfunction
 
-function! s:RequireLocalPaneOrDetached()
+function! s:RequireLocalPaneOrDetached() abort
     if !exists('s:detached_window') && !exists('s:runner_pane')
         call s:EchoError("No pane, local or detached.")
         return 0
@@ -83,14 +88,14 @@ function! s:RequireLocalPaneOrDetached()
     return 1
 endfunction
 
-function! s:KillLocalRunner()
+function! s:KillLocalRunner() abort
     if s:ValidRunnerPaneSet()
       call s:SendTmuxCommand('kill-pane', '-t', s:runner_pane)
       unlet s:runner_pane
     endif
 endfunction
 
-function! s:WindowMap()
+function! s:WindowMap() abort
   let l:window_pattern = '\v(\d+): ([-_a-zA-Z]{-})[-\* ]\s.*'
   let l:window_map = {}
   for l:line in split(s:SendTmuxCommand("list-windows"), "\n")
@@ -100,13 +105,13 @@ function! s:WindowMap()
   return l:window_map
 endfunction
 
-function! s:KillDetachedWindow()
+function! s:KillDetachedWindow() abort
     if !s:DetachedPaneAvailable() | return | endif
     call s:SendTmuxCommand("kill-window", '-t', s:detached_window)
     unlet s:detached_window
 endfunction
 
-function! s:KillRunnerPane()
+function! s:KillRunnerPane() abort
     if !s:RequireLocalPaneOrDetached() | return | endif
     if exists("s:runner_pane")
         call s:KillLocalRunner()
@@ -115,7 +120,7 @@ function! s:KillRunnerPane()
     endif
 endfunction
 
-function! s:GetPaneID(...)
+function! s:GetPaneID(...) abort
     let l:target=''
     if !empty(a:0)
         let l:target = '-t '.a:0
@@ -125,25 +130,25 @@ function! s:GetPaneID(...)
   return str2nr(s:SendTmuxCommand("display-message ".l:target."-p \"#{pane_id}\""))
 endfunction
 
-function! s:ActivePaneIndex()
+function! s:ActivePaneIndex() abort
   return s:SendTmuxCommand("display-message -p \"#{pane_id}\"")
 endfunction
 
-function! s:TmuxPanes()
+function! s:TmuxPanes() abort
     let l:panes = s:SendTmuxCommand("list-panes")
     return split(l:panes, '\n')
 endfunction
 
-function! s:FocusTmuxPane(pane_number)
+function! s:FocusTmuxPane(pane_number) abort
     call s:SendTmuxCommand('select-pane', '-t', a:pane_number)
 endfunction
 
-function! s:RunnerPaneDimensions()
+function! s:RunnerPaneDimensions() abort
     let [ l:width, l:height ] = s:GetTmuxInfo('#{pane_width}','#{pane_height}')
     return {'width': l:width, 'height': l:height}
 endfunction
 
-function! s:FocusRunnerPane(should_zoom)
+function! s:FocusRunnerPane(should_zoom) abort
     if !s:ValidRunnerPaneSet() | return | endif
     call s:FocusTmuxPane(s:runner_pane)
     if a:should_zoom
@@ -151,11 +156,11 @@ function! s:FocusRunnerPane(should_zoom)
     endif
 endfunction
 
-function! s:Strip(string)
+function! s:Strip(string) abort
     return substitute(a:string, '^\s*\(.\{-}\)\s*\n\?$', '\1', '')
 endfunction
 
-function! s:SendTmuxCommand(...)
+function! s:SendTmuxCommand(...) abort
     return s:Strip(system('tmux ' . join(a:000)))
 endfunction
 
@@ -163,45 +168,45 @@ function! s:GetTmuxInfo(...) abort
     echo "args = ".str(a:0)
 endfunction
 
-function! s:_SendKeys(keys)
+function! s:_SendKeys(keys) abort
     call s:SendTmuxCommand('send-keys','-t',s:runner_pane,a:keys)
 endfunction
 
-function! s:SendKeys(keys)
+function! s:SendKeys(keys) abort
     let l:cmd = g:VtrClearBeforeSend ? g:VtrClearSequence.a:keys : a:keys
     call s:_SendKeys(l:cmd)
     call s:SendEnterSequence()
 endfunction
 
-function! s:SendKeysRaw(keys)
+function! s:SendKeysRaw(keys) abort
   if !s:ValidRunnerPaneSet() | return | endif
   call s:_SendKeys(a:keys)
 endfunction
 
-function! s:SendCtrlD()
+function! s:SendCtrlD() abort
   call s:SendKeysRaw('')
 endfunction
 
-function! s:SendCtrlC()
+function! s:SendCtrlC() abort
   call s:SendKeysRaw('')
 endfunction
 
-function! s:SendEnterSequence()
+function! s:SendEnterSequence() abort
     call s:_SendKeys("Enter")
 endfunction
 
-function! s:SendClearSequence()
+function! s:SendClearSequence() abort
     if !s:ValidRunnerPaneSet() | return | endif
     call s:SendTmuxCopyModeExit()
     call s:_SendKeys(g:VtrClearSequence)
 endfunction
 
-function! s:SendQuitSequence()
+function! s:SendQuitSequence() abort
     if !s:ValidRunnerPaneSet() | return | endif
     call s:_SendKeys("q")
 endfunction
 
-function! s:GitCdUp()
+function! s:GitCdUp() abort
     let s:pane_path = s:SendTmuxCommand("display-message", "-p", "'#{pane_current_path}'")
     let l:git_repo_check = "git rev-parse --git-dir > /dev/null 2>&1"
     let l:cdup_cmd = "cd './'$(git rev-parse --show-cdup)"
@@ -211,44 +216,44 @@ function! s:GitCdUp()
     call s:SendClearSequence()
 endfunction
 
-function! s:FocusVimPane()
+function! s:FocusVimPane() abort
     call s:FocusTmuxPane(s:vim_pane)
 endfunction
 
-function! s:LastWindowNumber()
+function! s:LastWindowNumber() abort
     return split(s:SendTmuxCommand("list-windows"), '\n')[-1][0]
 endfunction
 
-function! s:ToggleOrientationVariable()
+function! s:ToggleOrientationVariable() abort
     let s:vtr_orientation = (s:vtr_orientation == "v" ? "h" : "v")
 endfunction
 
-function! s:BreakRunnerPaneToTempWindow()
+function! s:BreakRunnerPaneToTempWindow() abort
     call s:SendTmuxCommand('break-pane', '-d', '-t', s:runner_pane)
     let s:detached_window = s:LastWindowNumber()
     let s:vim_pane = s:ActivePaneIndex()
     unlet s:runner_pane
 endfunction
 
-function! s:RunnerDimensionSpec()
+function! s:RunnerDimensionSpec() abort
     return join(["-p", s:vtr_percentage, "-".s:vtr_orientation])
 endfunction
 
-function! s:TmuxInfo(message)
+function! s:TmuxInfo(message) abort
   " TODO: this should accept optional target pane, default to current.
   " Pass that to TargetedCommand as "display-message", "-p '#{...}')
   return s:SendTmuxCommand("display-message -p '#{" . a:message . "}'")
 endfunction
 
-function! s:PaneCount()
+function! s:PaneCount() abort
   return str2nr(s:TmuxInfo('window_panes'))
 endfunction
 
-function! s:AvailableRunnerPaneIndices()
+function! s:AvailableRunnerPaneIndices() abort
   return filter([], "v:val != " . s:ActivePaneIndex())
 endfunction
 
-function! s:AltPane()
+function! s:AltPane() abort
   if s:PaneCount() == 2
     return s:AvailableRunnerPaneIndices()[0]
   else
@@ -256,7 +261,7 @@ function! s:AltPane()
   endif
 endfunction
 
-function! s:AttachToPane(...)
+function! s:AttachToPane(...) abort
   if exists("a:1") && a:1 != ""
     call s:AttachToSpecifiedPane(a:1)
   elseif s:PaneCount() == 2
@@ -266,7 +271,7 @@ function! s:AttachToPane(...)
   endif
 endfunction
 
-function! s:PromptForPaneToAttach()
+function! s:PromptForPaneToAttach() abort
   if g:VtrDisplayPaneNumbers
     call s:SendTmuxCommand('source ~/.tmux.conf && tmux display-panes')
   endif
@@ -278,14 +283,14 @@ function! s:PromptForPaneToAttach()
   endif
 endfunction
 
-function! s:CurrentMajorOrientation()
+function! s:CurrentMajorOrientation() abort
   let l:orientation_map = { '[': 'v', '{': 'h' }
   let l:layout = s:TmuxInfo('window_layout')
   let l:outermost_orientation = substitute(l:layout, '[^[{]', '', 'g')[0]
   return l:orientation_map[l:outermost_orientation]
 endfunction
 
-function! s:AttachToSpecifiedPane(desired_pane)
+function! s:AttachToSpecifiedPane(desired_pane) abort
   let l:desired_pane = str2nr(a:desired_pane)
   if s:ValidRunnerPaneNumber(l:desired_pane)
     let s:runner_pane = l:desired_pane
@@ -297,24 +302,24 @@ function! s:AttachToSpecifiedPane(desired_pane)
   endif
 endfunction
 
-function! s:EchoError(message)
+function! s:EchoError(message) abort
   echohl ErrorMsg | echo "\rVTR: ". a:message | echohl None
 endfunction
 
-function! s:DesiredPaneExists(desired_pane)
+function! s:DesiredPaneExists(desired_pane) abort
     let l:r = s:SendTmuxCommand('list-panes','-f',"'#{==:#{pane_id},".a:desired_pane."}'")
     echo 'desired pane ='.a:desired_pane
     echo 'result = '.l:r
     call getchar()
 endfunction
 
-function! s:ValidRunnerPaneNumber(desired_pane)
+function! s:ValidRunnerPaneNumber(desired_pane) abort
   if a:desired_pane == s:ActivePaneIndex() | return 0 | endif
   if s:DesiredPaneExists(a:desired_pane) | return 0 | endif
   return 1
 endfunction
 
-function! s:ReattachPane()
+function! s:ReattachPane() abort
     if !s:DetachedPaneAvailable() | return | endif
     let s:vim_pane = s:ActivePaneIndex()
     call s:_ReattachPane()
@@ -324,7 +329,7 @@ function! s:ReattachPane()
     endif
 endfunction
 
-function! s:_ReattachPane()
+function! s:_ReattachPane() abort
     let l:join_cmd = join(["join-pane", "-s", ":".s:detached_window.".0",
         \ s:RunnerDimensionSpec()])
     call s:SendTmuxCommand(l:join_cmd)
@@ -332,7 +337,7 @@ function! s:_ReattachPane()
     let s:runner_pane = s:ActivePaneIndex()
 endfunction
 
-function! s:ReorientRunner()
+function! s:ReorientRunner() abort
     if !s:ValidRunnerPaneSet() | return | endif
     call s:BreakRunnerPaneToTempWindow()
     call s:ToggleOrientationVariable()
@@ -343,18 +348,18 @@ function! s:ReorientRunner()
     endif
 endfunction
 
-function! s:HighlightedPrompt(prompt)
+function! s:HighlightedPrompt(prompt) abort
     echohl String | let l:input = shellescape(input(a:prompt)) | echohl None
     return l:input
 endfunction
 
-function! s:FlushCommand()
+function! s:FlushCommand() abort
     if exists("s:user_command")
         unlet s:user_command
     endif
 endfunction
 
-function! s:SendTmuxCopyModeExit()
+function! s:SendTmuxCopyModeExit() abort
     let l:session = s:TmuxInfo('session_name')
     let l:win = s:TmuxInfo('window_index')
     let l:target_cmd = join([l:session.':'.l:win.".".s:runner_pane])
@@ -363,7 +368,7 @@ function! s:SendTmuxCopyModeExit()
     endif
 endfunction
 
-function! s:SendCommandToRunner(ensure_pane, ...)
+function! tmux_runner#SendCommandToRunner(ensure_pane, ...) abort
     if a:ensure_pane | call s:EnsureRunnerPane() | endif
     if !s:ValidRunnerPaneSet() | return | endif
     if exists("a:1") && a:1 != ""
@@ -385,7 +390,7 @@ function! s:SendCommandToRunner(ensure_pane, ...)
     call s:SendKeys(s:user_command)
 endfunction
 
-function! s:EnsureRunnerPane(...)
+function! s:EnsureRunnerPane(...) abort
     if exists('s:detached_window')
         call s:ReattachPane()
     elseif exists('s:runner_pane')
@@ -399,14 +404,14 @@ function! s:EnsureRunnerPane(...)
     endif
 endfunction
 
-function! s:SendLinesToRunner(ensure_pane) range
+function! s:SendLinesToRunner(ensure_pane) range abort
     if a:ensure_pane | call s:EnsureRunnerPane() | endif
     if !s:ValidRunnerPaneSet() | return | endif
     call s:SendTmuxCopyModeExit()
     call s:SendTextToRunner(getline(a:firstline, a:lastline))
 endfunction
 
-function! s:PrepareLines(lines)
+function! s:PrepareLines(lines) abort
     let l:prepared = a:lines
     if g:VtrStripLeadingWhitespace
         let l:prepared = map(a:lines, 'substitute(v:val,"^\\s*","","")')
@@ -420,7 +425,7 @@ function! s:PrepareLines(lines)
     return l:prepared
 endfunction
 
-function! s:SendTextToRunner(lines)
+function! s:SendTextToRunner(lines) abort
     if !s:ValidRunnerPaneSet() | return | endif
     let l:prepared = s:PrepareLines(a:lines)
     let l:send_keys_cmd = join(['send-keys', '-t', s:runner_pane])
@@ -430,7 +435,7 @@ function! s:SendTextToRunner(lines)
     endfor
 endfunction
 
-function! s:SendFileViaVtr(ensure_pane)
+function! s:SendFileViaVtr(ensure_pane) abort
     let l:runners = s:CurrentFiletypeRunners()
     if has_key(l:runners, &filetype)
         write
@@ -443,7 +448,7 @@ function! s:SendFileViaVtr(ensure_pane)
     endif
 endfunction
 
-function! s:CurrentFiletypeRunners()
+function! s:CurrentFiletypeRunners() abort
     let l:default_runners = {
             \ 'elixir': 'elixir {file}',
             \ 'javascript': 'node {file}',
@@ -458,16 +463,16 @@ function! s:CurrentFiletypeRunners()
     endif
 endfunction
 
-function! VtrSendCommand(command, ...)
+function! VtrSendCommand(command, ...) abort
     let l:ensure_pane = 0
     if exists("a:1")
       let l:ensure_pane = a:1
     endif
-    call s:SendCommandToRunner(l:ensure_pane, a:command)
+    call tmux_runner#SendCommandToRunner(l:ensure_pane, a:command)
 endfunction
 
-function! s:DefineCommands()
-    command! -bang -nargs=? VtrSendCommandToRunner call s:SendCommandToRunner(<bang>0, <f-args>)
+function! tmux_runner#DefineCommands() abort
+    command! -bang -nargs=? VtrSendCommandToRunner call tmux_runner#SendCommandToRunner(<bang>0, <f-args>)
     command! -bang -range VtrSendLinesToRunner <line1>,<line2>call s:SendLinesToRunner(<bang>0)
     command! -bang VtrSendFile call s:SendFileViaVtr(<bang>0)
     command! -nargs=? VtrOpenRunner call s:EnsureRunnerPane(<args>)
@@ -484,7 +489,7 @@ function! s:DefineCommands()
     command! -nargs=1 VtrSendKeysRaw call s:SendKeysRaw(<q-args>)
 endfunction
 
-function! s:DefineKeymaps()
+function! tmux_runner#DefineKeymaps() abort
     if g:VtrUseVtrMaps
         nnoremap <leader>va :VtrAttachToPane<cr>
         nnoremap <leader>ror :VtrReorientRunner<cr>
@@ -501,7 +506,7 @@ function! s:DefineKeymaps()
     endif
 endfunction
 
-function! s:InitializeVariables()
+function! tmux_runner#InitializeVariables() abort
     call s:InitVariable("g:VtrPercentage", 20)
     call s:InitVariable("g:VtrOrientation", "v")
     call s:InitVariable("g:VtrInitialCommand", "")
@@ -521,8 +526,4 @@ function! s:InitializeVariables()
     let s:vtr_orientation = g:VtrOrientation
 endfunction
 
-call s:InitializeVariables()
-call s:DefineCommands()
-call s:DefineKeymaps()
-
-" vim: set fdm=marker
+" vim: set sw=4 ts=4 sts=4 et:
